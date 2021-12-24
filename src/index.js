@@ -7,8 +7,8 @@ import Stats from 'https://cdn.skypack.dev/three@v0.136.0/examples/jsm/libs/stat
 let AppSettings = class {
     constructor() {
         this.cubeSideLength = 0.02;
-        this.nGridRows = 150;
-        this.nGridCols = 150;
+        this.nGridRows = 250;
+        this.nGridCols = 250;
     }
     get gridSizeX() {
         return this.nGridRows * 1.1 * this.cubeSideLength;
