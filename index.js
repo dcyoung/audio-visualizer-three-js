@@ -77,8 +77,7 @@ function initScene() {
     camera.position.set(0, 0, 10);
 
     scene = new THREE.Scene();
-    // scene.background = new THREE.Color(0x222244);
-    scene.background = new THREE.Color(0xffffff);
+    scene.background = new THREE.Color(0x222244);
     scene.fog = new THREE.Fog(0x222244, 50, 100);
 
     // GROUND PLANE
