@@ -74,7 +74,8 @@ function initControls() {
 function initScene() {
     // CAMERA
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-    camera.position.set(0, 0, 10);
+    camera.position.set(0, -4, 2.8);
+    camera.up.set(0, 0, 1);
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x222244);
@@ -146,14 +147,6 @@ function initScene() {
         specular: 0x222222
     });
 
-
-    // per instance data
-    const matrix = new THREE.Matrix4();
-    const offset = new THREE.Vector3();
-    const orientation = new THREE.Quaternion();
-    const scale = new THREE.Vector3(1, 1, 1);
-    let x, y, z, idx, normGridX, normGridY;
-
     mesh = new THREE.InstancedMesh(geometry, material, appSettings.nGridRows * appSettings.nGridCols);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -161,7 +154,6 @@ function initScene() {
 }
 
 function onWindowResize() {
-
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
