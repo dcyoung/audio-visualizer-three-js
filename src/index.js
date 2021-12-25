@@ -6,9 +6,15 @@ import Stats from 'https://cdn.skypack.dev/three@v0.136.0/examples/jsm/libs/stat
 
 let AppSettings = class {
     constructor() {
+        // grid
         this.cubeSideLength = 0.02;
         this.nGridRows = 250;
         this.nGridCols = 250;
+
+        // wave generation
+        this.waveGeneratorEnabled = true;
+        this.amplitude = 1;
+        this.periodSec = 0.5;
     }
     get gridSizeX() {
         return this.nGridRows * 1.1 * this.cubeSideLength;
@@ -20,6 +26,7 @@ let AppSettings = class {
 };
 
 const appSettings = new AppSettings();
+
 const audioEl = document.getElementById('audio');
 let freqBinValues, container, stats, geometry, material, camera, scene, renderer, mesh, controls, dirGroup, ambientLight, spotLight, dirLight;
 let lastTime = 0;
@@ -62,8 +69,14 @@ function initGui() {
             return val
         }
     });
-    gui.add(proxiedAppSettings, 'nGridRows', 1, 500, 1);
-    gui.add(proxiedAppSettings, 'nGridCols', 1, 500, 1);
+    const gridFolder = gui.addFolder("Grid");
+    gridFolder.add(proxiedAppSettings, 'nGridRows', 1, 500, 1);
+    gridFolder.add(proxiedAppSettings, 'nGridCols', 1, 500, 1);
+
+    const waveFolder = gui.addFolder("Wave Generator");
+    waveFolder.add(proxiedAppSettings, "waveGeneratorEnabled");
+    waveFolder.add(proxiedAppSettings, "amplitude", 0.0, 5.0, 0.1);
+    waveFolder.add(proxiedAppSettings, "periodSec", 0.0, 2.0, 0.01);
 
 }
 function initControls() {
@@ -93,7 +106,7 @@ function initScene() {
 
     ground.castShadow = true;
     ground.receiveShadow = true;
-    scene.add(ground);
+    // scene.add(ground);
     ground.position.z = -0.05;
 
 
@@ -170,7 +183,7 @@ function getValueForNormalizedCoord(bars, normalizedCoord) {
     return valueBelow + (rawIdx % 1) * (valueAbove - valueBelow);
 }
 
-function updateGrid(bars) {
+function updateGridFreqBins(values) {
     const matrix = new THREE.Matrix4();
     const offset = new THREE.Vector3();
     const orientation = new THREE.Quaternion();
@@ -186,8 +199,34 @@ function updateGrid(bars) {
             y = appSettings.gridSizeY * (normGridY - 0.5);
             let normRadialOffset = Math.sqrt(Math.pow(normGridX - 0.5, 2) + Math.pow(normGridY - 0.5, 2));
 
-            z = getValueForNormalizedCoord(bars, normRadialOffset);
-            // z = amplitude * Math.sin(b * normRadialOffset + phaseShift);
+            z = getValueForNormalizedCoord(values, normRadialOffset);
+            offset.set(x, y, z);
+            matrix.compose(offset, orientation, scale);
+            mesh.setMatrixAt(idx, matrix);
+        }
+    }
+
+    mesh.instanceMatrix.needsUpdate = true;
+}
+
+function updateGridWaveForm(time) {
+    const matrix = new THREE.Matrix4();
+    const offset = new THREE.Vector3();
+    const orientation = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    let x, y, z, idx, normGridX, normGridY;
+    let b = 2 * Math.PI / appSettings.periodSec;
+    let phaseShift = time / 1000;
+
+    for (let row = 0; row < appSettings.nGridRows; row++) {
+        for (let col = 0; col < appSettings.nGridCols; col++) {
+            idx = row * appSettings.nGridCols + col;
+            normGridX = row / appSettings.nGridRows;
+            normGridY = col / appSettings.nGridCols;
+            x = appSettings.gridSizeX * (normGridX - 0.5);
+            y = appSettings.gridSizeY * (normGridY - 0.5);
+            let normRadialOffset = Math.sqrt(Math.pow(normGridX - 0.5, 2) + Math.pow(normGridY - 0.5, 2));
+            z = appSettings.amplitude * Math.sin(b * normRadialOffset + phaseShift);
             offset.set(x, y, z);
             matrix.compose(offset, orientation, scale);
             mesh.setMatrixAt(idx, matrix);
@@ -207,11 +246,10 @@ function animate() {
 function render() {
     const time = performance.now();
     const delta = (time - lastTime) / 5000;
-    // let angularFreq = 1.0
-    // let periodSec = 0.5
-    // let amplitude = 100;
-    // let b = 2 * Math.PI / periodSec;
-    // let phaseShift = time / 1000;
+
+    if (appSettings.waveGeneratorEnabled) {
+        updateGridWaveForm(time);
+    }
 
     dirGroup.rotation.y += 0.7 * delta;
     dirLight.position.z = 17 + Math.sin(time * 0.001) * 5;
@@ -219,12 +257,15 @@ function render() {
     renderer.render(scene, camera);
 
 }
+
 const audioMotion = new AudioMotionAnalyzer(null, {
     source: audioEl,
     mode: 2,
     useCanvas: false, // don't use the canvas
     onCanvasDraw: instance => {
-        const maxHeight = container.clientHeight;
+        if (appSettings.waveGeneratorEnabled) {
+            return;
+        }
 
         // get analyzer bars data
         if (!freqBinValues) {
@@ -235,7 +276,7 @@ const audioMotion = new AudioMotionAnalyzer(null, {
             freqBinValues[barIdx] = bar.value[0];
             barIdx++;
         }
-        updateGrid(freqBinValues);
+        updateGridFreqBins(freqBinValues);
     }
 });
 
@@ -243,6 +284,7 @@ const audioMotion = new AudioMotionAnalyzer(null, {
 document.getElementById('live').addEventListener('click', () => {
     audioEl.src = 'https://icecast2.ufpel.edu.br/live';
     audioEl.play();
+    appSettings.waveGeneratorEnabled = false;
 });
 // file upload
 document.getElementById('upload').addEventListener('change', e => {
@@ -251,5 +293,6 @@ document.getElementById('upload').addEventListener('change', e => {
     if (fileBlob) {
         audioEl.src = URL.createObjectURL(fileBlob);
         audioEl.play();
+        appSettings.waveGeneratorEnabled = false;
     }
 });
