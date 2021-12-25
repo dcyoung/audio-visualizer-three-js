@@ -10,11 +10,12 @@ let AppSettings = class {
         this.cubeSideLength = 0.02;
         this.nGridRows = 250;
         this.nGridCols = 250;
+        this.groundPlaneEnabled = true;
 
         // wave generation
         this.waveGeneratorEnabled = true;
         this.amplitude = 1;
-        this.periodSec = 0.5;
+        this.periodSec = 0.25;
     }
     get gridSizeX() {
         return this.nGridRows * 1.1 * this.cubeSideLength;
@@ -28,7 +29,7 @@ let AppSettings = class {
 const appSettings = new AppSettings();
 
 const audioEl = document.getElementById('audio');
-let freqBinValues, container, stats, geometry, material, camera, scene, renderer, mesh, controls, dirGroup, ambientLight, spotLight, dirLight;
+let freqBinValues, container, stats, ground, geometry, material, camera, scene, renderer, mesh, controls, dirGroup, ambientLight, spotLight, dirLight;
 let lastTime = 0;
 
 init();
@@ -66,18 +67,24 @@ function initGui() {
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             scene.add(mesh);
+
+            scene.remove(ground);
+            ground.position.z = -appSettings.amplitude - 0.05;
+            if (appSettings.groundPlaneEnabled) {
+                scene.add(ground);
+            }
             return val
         }
     });
     const gridFolder = gui.addFolder("Grid");
     gridFolder.add(proxiedAppSettings, 'nGridRows', 1, 500, 1);
     gridFolder.add(proxiedAppSettings, 'nGridCols', 1, 500, 1);
+    gridFolder.add(proxiedAppSettings, 'groundPlaneEnabled');
 
     const waveFolder = gui.addFolder("Wave Generator");
     waveFolder.add(proxiedAppSettings, "waveGeneratorEnabled");
     waveFolder.add(proxiedAppSettings, "amplitude", 0.0, 5.0, 0.1);
-    waveFolder.add(proxiedAppSettings, "periodSec", 0.0, 2.0, 0.01);
-
+    waveFolder.add(proxiedAppSettings, "periodSec", 0.01, 2.0, 0.01);
 }
 function initControls() {
     controls = new OrbitControls(camera, renderer.domElement);
@@ -95,7 +102,7 @@ function initScene() {
     scene.fog = new THREE.Fog(0x222244, 50, 100);
 
     // GROUND PLANE
-    const ground = new THREE.Mesh(
+    ground = new THREE.Mesh(
         new THREE.PlaneGeometry(200, 200),
         new THREE.MeshPhongMaterial({
             color: 0x999999,
@@ -104,10 +111,10 @@ function initScene() {
         })
     );
 
-    ground.castShadow = true;
+    // ground.castShadow = true;
     ground.receiveShadow = true;
-    // scene.add(ground);
-    ground.position.z = -0.05;
+    scene.add(ground);
+    ground.position.z = -appSettings.amplitude - 0.05;
 
 
     // LIGHTING
@@ -145,7 +152,6 @@ function initScene() {
     dirGroup = new THREE.Group();
     dirGroup.add(dirLight);
     scene.add(dirGroup);
-
 
     // GEOMETRY
     geometry = new THREE.BoxGeometry(
