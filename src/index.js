@@ -15,7 +15,7 @@ let AppSettings = class {
         // wave generation
         this.waveGeneratorEnabled = true;
         this.amplitude = 1;
-        this.periodSec = 0.25;
+        this.frequencyHz = 4;
     }
     get gridSizeX() {
         return this.nGridRows * 1.1 * this.cubeSideLength;
@@ -29,6 +29,7 @@ let AppSettings = class {
 const appSettings = new AppSettings();
 
 const audioEl = document.getElementById('audio');
+let micStream;
 let freqBinValues, container, stats, ground, geometry, material, camera, scene, renderer, mesh, controls, dirGroup, ambientLight, spotLight, dirLight;
 let lastTime = 0;
 
@@ -56,6 +57,7 @@ function init() {
     initGui();
     initControls();
 }
+
 function initGui() {
     const gui = new GUI({ width: 350 });
     // listen for app changes that require modifying the mesh...
@@ -81,10 +83,9 @@ function initGui() {
     gridFolder.add(proxiedAppSettings, 'nGridCols', 1, 500, 1);
     gridFolder.add(proxiedAppSettings, 'groundPlaneEnabled');
 
-    const waveFolder = gui.addFolder("Wave Generator");
-    waveFolder.add(proxiedAppSettings, "waveGeneratorEnabled");
-    waveFolder.add(proxiedAppSettings, "amplitude", 0.0, 5.0, 0.1);
-    waveFolder.add(proxiedAppSettings, "periodSec", 0.01, 2.0, 0.01);
+    const waveFolder = gui.addFolder("Wave Properties");
+    waveFolder.add(proxiedAppSettings, "amplitude", 0.0, 2.5, 0.1);
+    waveFolder.add(proxiedAppSettings, "frequencyHz", 0.0, 50, 0.5).name("freq (Hz) - generated")
 }
 function initControls() {
     controls = new OrbitControls(camera, renderer.domElement);
@@ -221,7 +222,8 @@ function updateGridWaveForm(time) {
     const orientation = new THREE.Quaternion();
     const scale = new THREE.Vector3(1, 1, 1);
     let x, y, z, idx, normGridX, normGridY;
-    let b = 2 * Math.PI / appSettings.periodSec;
+    let periodSec = 1 / appSettings.frequencyHz;
+    let b = 2 * Math.PI / periodSec;
     let phaseShift = time / 1000;
 
     for (let row = 0; row < appSettings.nGridRows; row++) {
@@ -242,7 +244,6 @@ function updateGridWaveForm(time) {
     mesh.instanceMatrix.needsUpdate = true;
 }
 //
-
 function animate() {
     requestAnimationFrame(animate);
     render();
@@ -264,41 +265,79 @@ function render() {
 
 }
 
+function reactToAudio(instance) {
+    if (appSettings.waveGeneratorEnabled) {
+        return;
+    }
+
+    // get analyzer bars data
+    if (!freqBinValues) {
+        freqBinValues = new Array(instance.getBars().length);
+    }
+    let barIdx = 0;
+    for (const bar of instance.getBars()) {
+        freqBinValues[barIdx] = bar.value[0];
+        barIdx++;
+    }
+    updateGridFreqBins(freqBinValues);
+}
 const audioMotion = new AudioMotionAnalyzer(null, {
     source: audioEl,
     mode: 2,
     useCanvas: false, // don't use the canvas
-    onCanvasDraw: instance => {
-        if (appSettings.waveGeneratorEnabled) {
-            return;
-        }
+    onCanvasDraw: reactToAudio
+});
 
-        // get analyzer bars data
-        if (!freqBinValues) {
-            freqBinValues = new Array(instance.getBars().length);
-        }
-        let barIdx = 0;
-        for (const bar of instance.getBars()) {
-            freqBinValues[barIdx] = bar.value[0];
-            barIdx++;
-        }
-        updateGridFreqBins(freqBinValues);
+const audioSrcSelect = document.getElementById("selectAudioSrc");
+audioSrcSelect.addEventListener('change', () => {
+    // disconnect all existing audio sources
+    if (micStream) {
+        audioMotion.disconnectInput(micStream);
     }
-});
-
-// play stream
-document.getElementById('live').addEventListener('click', () => {
-    audioEl.src = 'https://icecast2.ufpel.edu.br/live';
-    audioEl.play();
-    appSettings.waveGeneratorEnabled = false;
-});
-// file upload
-document.getElementById('upload').addEventListener('change', e => {
-    const fileBlob = e.target.files[0];
-
-    if (fileBlob) {
-        audioEl.src = URL.createObjectURL(fileBlob);
-        audioEl.play();
-        appSettings.waveGeneratorEnabled = false;
+    // connec to a source
+    switch (audioSrcSelect.value) {
+        case "generated":
+            appSettings.waveGeneratorEnabled = true;
+            break;
+        case "mic":
+            if (navigator.mediaDevices) {
+                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then(stream => {
+                        audioEl.pause();
+                        // create stream using audioMotion audio context
+                        micStream = audioMotion.audioCtx.createMediaStreamSource(stream);
+                        // connect microphone stream to analyzer
+                        audioMotion.connectInput(micStream);
+                        // mute output to prevent feedback loops from the speakers
+                        audioMotion.volume = 0;
+                        appSettings.waveGeneratorEnabled = false;
+                    })
+                    .catch(err => {
+                        alert('Microphone access denied by user');
+                    });
+            }
+            else {
+                alert('User mediaDevices not available');
+            }
+            break;
+        case "live":
+            // Connect to stream
+            audioEl.src = 'https://icecast2.ufpel.edu.br/live';
+            audioMotion.volume = 1;
+            audioEl.play();
+            appSettings.waveGeneratorEnabled = false;
+            break;
+        // case "upload":
+        //     // Open file
+        //     const fileBlob = e.target.files[0];
+        //     if (fileBlob) {
+        //         audioEl.src = URL.createObjectURL(fileBlob);
+        //         audioEl.play();
+        //         audioMotion.volume = 1;
+        //         appSettings.waveGeneratorEnabled = false;
+        //     }
+        //     break;
+        default:
+            alert("Unexpected value..." + audioSrcSelect.value);
     }
 });
