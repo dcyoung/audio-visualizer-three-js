@@ -206,7 +206,7 @@ function updateGridFreqBins(values) {
             y = appSettings.gridSizeY * (normGridY - 0.5);
             let normRadialOffset = Math.sqrt(Math.pow(normGridX - 0.5, 2) + Math.pow(normGridY - 0.5, 2));
 
-            z = getValueForNormalizedCoord(values, normRadialOffset);
+            z = appSettings.amplitude * getValueForNormalizedCoord(values, normRadialOffset);
             offset.set(x, y, z);
             matrix.compose(offset, orientation, scale);
             mesh.setMatrixAt(idx, matrix);
